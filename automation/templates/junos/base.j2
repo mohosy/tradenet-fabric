@@ -1,0 +1,80 @@
+{# Juniper Junos — Base Configuration Template
+   =============================================
+   Junos config is VERY different from Cisco/Arista:
+   - Hierarchical structure (set commands or curly-brace blocks)
+   - Commit model (changes aren't active until you "commit")
+   - Candidate config vs active config (you can stage changes)
+
+   WHY THIS MATTERS (for interview):
+   Junos' commit model is actually SAFER than Cisco's "apply immediately"
+   approach. You can:
+   1. Load changes into candidate config
+   2. Show the diff ("show | compare")
+   3. Commit with rollback timer ("commit confirmed 5" — auto-rolls
+      back in 5 minutes if you don't confirm)
+   This is ideal for edge routers at exchange colocations where a
+   bad config could take down market data connectivity.
+#}
+system {
+    host-name {{ inventory_hostname }};
+    domain-name tradenet.local;
+    time-zone UTC;
+    root-authentication {
+        encrypted-password "{{ vault_device_password_hash }}";
+    }
+    login {
+        user admin {
+            class super-user;
+            authentication {
+                encrypted-password "{{ vault_device_password_hash }}";
+            }
+        }
+    }
+{% for ntp in ntp_servers %}
+    ntp {
+        server {{ ntp }};
+    }
+{% endfor %}
+{% for dns in dns_servers %}
+    name-server {
+        {{ dns }};
+    }
+{% endfor %}
+    syslog {
+        host {{ syslog.server }} {
+            any {{ syslog.severity }};
+            facility-override {{ syslog.facility }};
+            source-address {{ loopback_ip | ipaddr('address') }};
+        }
+    }
+    services {
+        ssh {
+            protocol-version v2;
+            max-sessions-per-connection 5;
+        }
+        netconf {
+            ssh;
+            {# NETCONF over SSH — this is how Ansible and our SDN controller
+               communicate with Juniper devices. NETCONF uses structured XML
+               (not screen-scraping like SSH CLI), which is more reliable for
+               automation. #}
+        }
+    }
+}
+interfaces {
+    lo0 {
+        unit 0 {
+            description "MGMT-LOOPBACK";
+            family inet {
+                address {{ loopback_ip }};
+            }
+        }
+    }
+}
+snmp {
+    community {{ snmp.community }} {
+        authorization read-only;
+    }
+    location "{{ snmp.location }}";
+    contact "{{ snmp.contact }}";
+}

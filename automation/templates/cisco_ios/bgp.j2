@@ -1,0 +1,113 @@
+{# Cisco IOS — BGP Configuration Template
+   ========================================
+   Configures iBGP for inter-site routing and eBGP for external peering.
+
+   KEY DECISIONS (for interview):
+   - iBGP sessions use loopback IPs (not physical IPs) for resilience
+   - Route reflectors at DC-East and DC-West reduce the iBGP mesh
+   - We set next-hop-self on route reflector clients so reflected
+     routes have reachable next-hops
+   - Aggressive timers (10s/30s) for faster peer detection
+   - Soft reconfiguration inbound — lets us change policy without
+     tearing down the session (crucial during market hours)
+#}
+!
+! === BGP Process ===
+router bgp {{ bgp.internal_asn }}
+ bgp router-id {{ loopback_ip | ipaddr('address') }}
+ bgp log-neighbor-changes
+ no bgp default ipv4-unicast
+ {# WHY no default ipv4-unicast (for interview):
+    By default, Cisco activates all peers for IPv4 unicast.
+    We disable this and explicitly activate only the peers and
+    address families we need. This is best practice — explicit
+    is better than implicit, especially for BGP where a mistake
+    can leak routes to the internet. #}
+!
+ ! === iBGP Peers ===
+{% if bgp_ibgp_peers is defined %}
+{% for peer in bgp_ibgp_peers %}
+ neighbor {{ peer.ip }} remote-as {{ bgp.internal_asn }}
+ neighbor {{ peer.ip }} description {{ peer.description | default('iBGP peer') }}
+ neighbor {{ peer.ip }} update-source Loopback0
+ neighbor {{ peer.ip }} timers {{ bgp.timers.keepalive }} {{ bgp.timers.holdtime }}
+ neighbor {{ peer.ip }} soft-reconfiguration inbound
+{% if peer.route_reflector_client | default(false) %}
+ neighbor {{ peer.ip }} route-reflector-client
+ {# This device IS a route reflector, and this peer is a client.
+    The RR will reflect routes learned from one client to all others,
+    eliminating the need for a full iBGP mesh. #}
+{% endif %}
+{% endfor %}
+{% endif %}
+!
+ ! === eBGP Peers ===
+{% if bgp_ebgp_peers is defined %}
+{% for peer in bgp_ebgp_peers %}
+ neighbor {{ peer.ip }} remote-as {{ peer.remote_asn }}
+ neighbor {{ peer.ip }} description {{ peer.description | default('eBGP peer') }}
+ neighbor {{ peer.ip }} timers {{ bgp.timers.keepalive }} {{ bgp.timers.holdtime }}
+ neighbor {{ peer.ip }} soft-reconfiguration inbound
+{% if peer.prefix_list_in is defined %}
+ neighbor {{ peer.ip }} prefix-list {{ peer.prefix_list_in }} in
+{% endif %}
+{% if peer.prefix_list_out is defined %}
+ neighbor {{ peer.ip }} prefix-list {{ peer.prefix_list_out }} out
+{% endif %}
+{% if peer.route_map_in is defined %}
+ neighbor {{ peer.ip }} route-map {{ peer.route_map_in }} in
+{% endif %}
+{% endfor %}
+{% endif %}
+!
+ ! === IPv4 Address Family ===
+ address-family ipv4 unicast
+{% if bgp_ibgp_peers is defined %}
+{% for peer in bgp_ibgp_peers %}
+  neighbor {{ peer.ip }} activate
+  neighbor {{ peer.ip }} next-hop-self
+  {# next-hop-self: When reflecting routes to iBGP clients, rewrite
+     the next-hop to our own loopback. Without this, the client might
+     receive a route with a next-hop it can't reach (e.g., an eBGP
+     peer's IP that's not in the IGP). #}
+{% endfor %}
+{% endif %}
+{% if bgp_ebgp_peers is defined %}
+{% for peer in bgp_ebgp_peers %}
+  neighbor {{ peer.ip }} activate
+{% endfor %}
+{% endif %}
+{% if bgp_networks is defined %}
+{% for network in bgp_networks %}
+  network {{ network.prefix | ipaddr('network') }} mask {{ network.prefix | ipaddr('netmask') }}
+{% endfor %}
+{% endif %}
+ exit-address-family
+!
+! === Prefix Lists ===
+{% if bgp_prefix_lists is defined %}
+{% for pl in bgp_prefix_lists %}
+ip prefix-list {{ pl.name }} seq {{ loop.index * 10 }} {{ pl.action }} {{ pl.prefix }}
+{% endfor %}
+{% endif %}
+!
+! === Route Maps ===
+{% if bgp_route_maps is defined %}
+{% for rm in bgp_route_maps %}
+route-map {{ rm.name }} {{ rm.action }} {{ rm.sequence }}
+{% if rm.match_prefix_list is defined %}
+ match ip address prefix-list {{ rm.match_prefix_list }}
+{% endif %}
+{% if rm.set_local_preference is defined %}
+ set local-preference {{ rm.set_local_preference }}
+{% endif %}
+{% if rm.set_med is defined %}
+ set metric {{ rm.set_med }}
+{% endif %}
+{% if rm.set_community is defined %}
+ set community {{ rm.set_community }}
+{% endif %}
+{% endfor %}
+{% endif %}
+!
+end

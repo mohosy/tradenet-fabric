@@ -1,0 +1,68 @@
+{# Cisco IOS — OSPF Configuration Template
+   =========================================
+   Configures OSPF for intra-site routing.
+
+   KEY DECISIONS (for interview):
+   - Each site is its own OSPF area (not area 0 for everything)
+     because this creates failure domains — a problem in one site's
+     OSPF doesn't flood LSAs to other sites
+   - We use BFD for sub-second failure detection (OSPF hello timers
+     alone take 4 seconds to detect a failure — too slow for trading)
+   - Reference bandwidth is 100Gbps so we get meaningful cost
+     differentiation between 1G, 10G, and 100G links
+   - Passive interfaces on non-routing ports prevent unnecessary
+     OSPF adjacencies (security + efficiency)
+#}
+!
+! === OSPF Process ===
+router ospf {{ ospf_process_id }}
+ router-id {{ loopback_ip | ipaddr('address') }}
+ auto-cost reference-bandwidth {{ ospf.reference_bandwidth }}
+ timers throttle spf 50 100 5000
+ {# SPF throttle: initial 50ms, increment 100ms, max 5000ms
+    WHY (for interview): Default SPF is too conservative.
+    50ms initial means we start computing new routes 50ms after
+    a change — aggressive but safe. The backoff (100ms increments
+    up to 5s) prevents SPF storms during flapping. #}
+ timers throttle lsa all 0 100 5000
+ log-adjacency-changes detail
+!
+ {# Advertise the loopback into OSPF — this is how BGP peers find each other.
+    BGP sessions are established between loopback IPs (not physical interfaces)
+    because loopbacks don't go down when a single link fails. #}
+ network {{ loopback_ip | ipaddr('address') }} 0.0.0.0 area {{ ospf_area }}
+!
+{% if ospf_networks is defined %}
+{% for network in ospf_networks %}
+ network {{ network.prefix | ipaddr('network') }} {{ network.prefix | ipaddr('wildcard') }} area {{ ospf_area }}
+{% endfor %}
+{% endif %}
+!
+{% if ospf_passive_interfaces is defined %}
+{% for intf in ospf_passive_interfaces %}
+ passive-interface {{ intf }}
+{% endfor %}
+{% endif %}
+!
+! === OSPF Interface Tuning ===
+{% if ospf_interfaces is defined %}
+{% for intf in ospf_interfaces %}
+interface {{ intf.name }}
+ ip ospf {{ ospf_process_id }} area {{ ospf_area }}
+ ip ospf hello-interval {{ ospf.hello_interval }}
+ ip ospf dead-interval {{ ospf.dead_interval }}
+{% if ospf.bfd_enabled %}
+ ip ospf bfd
+ bfd interval 100 min_rx 100 multiplier 3
+ {# BFD: 100ms interval, 3x multiplier = 300ms detection.
+    This is THE key optimization for trading networks.
+    Without BFD, failure detection takes 4 seconds (dead interval).
+    With BFD, it takes 300ms. That's 13x faster. #}
+{% endif %}
+{% if intf.cost is defined %}
+ ip ospf cost {{ intf.cost }}
+{% endif %}
+{% endfor %}
+{% endif %}
+!
+end

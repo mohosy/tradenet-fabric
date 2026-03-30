@@ -1,0 +1,51 @@
+# OCaml
+_build/
+*.byte
+*.native
+*.install
+.merlin
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Ansible
+*.retry
+
+# eBPF
+*.o
+*.ll
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# EVE-NG exports
+*.unl
+
+# Benchmarks (keep reports, ignore raw data)
+benchmarks/raw/
+
+# Secrets (never commit)
+*.key
+*.pem
+*.secret
+credentials/
+
+# Project artifacts
+janestreet_projects.pdf
+nornir.log
+.claude/
+dashboard/frontend/node_modules/
+dashboard/frontend/out/
+dashboard/frontend/.next/
+dashboard/frontend/.vercel/

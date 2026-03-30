@@ -1,0 +1,157 @@
+{# Juniper Junos — Security Zone Configuration
+   =============================================
+   This is where the Juniper SRX firewall capabilities shine.
+   We define security zones for network segmentation.
+
+   WHY JUNIPER AT THE EDGE (for interview):
+   The SRX combines routing AND security in one device. At exchange
+   colocations, we need both:
+   1. BGP peering with the exchange (routing)
+   2. Strict access control (only allow market data, block everything else)
+   The SRX handles both in one box, reducing complexity and latency
+   compared to a separate router + firewall.
+
+   ZONE MODEL (for interview):
+   - "trust" zone: Our internal network (traffic from our DCs)
+   - "exchange" zone: The exchange network (NYSE/CME/NASDAQ)
+   - "management" zone: Out-of-band management
+   Traffic between zones is denied by default — we explicitly allow
+   only what's needed. This is zero-trust networking.
+#}
+security {
+    zones {
+        security-zone trust {
+            description "Internal network — traffic from our data centers";
+            host-inbound-traffic {
+                system-services {
+                    ssh;
+                    netconf;
+                    snmp;
+                    ntp;
+                    ping;
+                }
+                protocols {
+                    ospf;
+                    bgp;
+                    bfd;
+                }
+            }
+{% if trust_interfaces is defined %}
+{% for intf in trust_interfaces %}
+            interfaces {
+                {{ intf }};
+            }
+{% endfor %}
+{% endif %}
+        }
+        security-zone exchange {
+            description "Exchange network — {{ exchange | upper }} connectivity";
+            host-inbound-traffic {
+                system-services {
+                    ping;
+                }
+                protocols {
+                    bgp;
+                    bfd;
+                }
+            }
+{% if exchange_interfaces is defined %}
+{% for intf in exchange_interfaces %}
+            interfaces {
+                {{ intf }};
+            }
+{% endfor %}
+{% endif %}
+        }
+        security-zone management {
+            description "Out-of-band management network";
+            host-inbound-traffic {
+                system-services {
+                    ssh;
+                    netconf;
+                    snmp;
+                    https;
+                    ping;
+                }
+            }
+{% if management_interfaces is defined %}
+{% for intf in management_interfaces %}
+            interfaces {
+                {{ intf }};
+            }
+{% endfor %}
+{% endif %}
+        }
+    }
+    policies {
+        {# Trust -> Exchange: Allow market data and BGP #}
+        from-zone trust to-zone exchange {
+            policy allow-trading {
+                match {
+                    source-address any;
+                    destination-address any;
+                    application [ junos-bgp junos-bfd ];
+                }
+                then {
+                    permit;
+                    log { session-init; }
+                }
+            }
+            policy allow-market-data {
+                match {
+                    source-address any;
+                    destination-address any;
+                    application market-data-feeds;
+                }
+                then {
+                    permit;
+                }
+            }
+            policy deny-all {
+                match {
+                    source-address any;
+                    destination-address any;
+                    application any;
+                }
+                then {
+                    deny;
+                    log { session-init; }
+                }
+            }
+        }
+        {# Exchange -> Trust: Only allow established sessions and market data #}
+        from-zone exchange to-zone trust {
+            policy allow-market-data-inbound {
+                match {
+                    source-address any;
+                    destination-address any;
+                    application market-data-feeds;
+                }
+                then {
+                    permit;
+                }
+            }
+            policy allow-bgp-inbound {
+                match {
+                    source-address any;
+                    destination-address any;
+                    application junos-bgp;
+                }
+                then {
+                    permit;
+                }
+            }
+            policy deny-all {
+                match {
+                    source-address any;
+                    destination-address any;
+                    application any;
+                }
+                then {
+                    deny;
+                    log { session-init; }
+                }
+            }
+        }
+    }
+}

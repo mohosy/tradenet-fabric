@@ -1,0 +1,90 @@
+# Chaos Scenario: BGP Hijack
+# ============================
+# Simulates a BGP route hijack and validates RPKI catches it.
+#
+# WHY THIS MATTERS (for interview):
+# BGP has no built-in authentication. Anyone can announce any prefix.
+# In 2018, a BGP hijack rerouted traffic destined for Amazon's DNS
+# through a Russian ISP, stealing cryptocurrency. For a trading firm,
+# a hijacked route could:
+# 1. Redirect market data through an attacker
+# 2. Man-in-the-middle trading traffic
+# 3. Cause market data to arrive late (missing trades)
+#
+# RPKI (Resource Public Key Infrastructure) is the defense.
+# This scenario injects a rogue announcement and verifies that
+# our RPKI validation catches and rejects it.
+
+---
+name: "BGP Hijack — NYSE Prefix"
+description: >
+  Inject a rogue BGP announcement for NYSE's market data prefix
+  (198.51.100.0/24) from a simulated attacker. Validate that
+  RPKI marks it as INVALID and our routers reject it.
+
+target:
+  prefix: "198.51.100.0/24"
+  legitimate_origin_asn: 11111  # NYSE's real ASN
+  attacker_asn: 99999           # Simulated attacker
+
+preconditions:
+  - type: route_exists
+    prefix: "198.51.100.0/24"
+    origin_asn: 11111
+    description: "Legitimate NYSE route must be in the table"
+
+  - type: rpki_status
+    prefix: "198.51.100.0/24"
+    origin_asn: 11111
+    expected_status: "valid"
+    description: "Legitimate route must be RPKI-valid"
+
+fault:
+  type: bgp_announce
+  prefix: "198.51.100.0/24"
+  origin_asn: 99999
+  as_path: "99999"
+  inject_via: "transit-a"   # Inject through simulated transit provider
+  # A more specific prefix would be even more dangerous:
+  # 198.51.100.0/25 would be preferred by BGP's longest-match rule
+
+measurements:
+  - name: "rpki_validation_result"
+    description: "RPKI should mark the rogue announcement as INVALID"
+    target: "invalid"
+    unit: "rpki_status"
+
+  - name: "route_accepted"
+    description: "Was the rogue route accepted into the routing table?"
+    target: false
+    unit: "boolean"
+
+  - name: "detection_time_ms"
+    description: "Time from hijack injection to RPKI alert"
+    target: 5000          # 5 seconds is acceptable for RPKI
+    unit: "ms"
+
+  - name: "alert_generated"
+    description: "Was an alert generated for the hijack attempt?"
+    target: true
+    unit: "boolean"
+
+postconditions:
+  - type: route_exists
+    prefix: "198.51.100.0/24"
+    origin_asn: 11111
+    description: "Legitimate NYSE route must still be active"
+
+  - type: rpki_status
+    prefix: "198.51.100.0/24"
+    origin_asn: 99999
+    expected_status: "invalid"
+    description: "Attacker route must be marked INVALID"
+
+recovery:
+  action: withdraw_announcement
+  verify:
+    - type: route_count
+      prefix: "198.51.100.0/24"
+      expected_count: 1
+      description: "Only legitimate route should remain"

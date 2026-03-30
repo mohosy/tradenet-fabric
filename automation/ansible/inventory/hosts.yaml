@@ -1,0 +1,229 @@
+# TradeNet Fabric — Ansible Inventory
+# ====================================
+# This inventory defines ALL network devices in the topology,
+# organized by site and role. Ansible uses this to know:
+# 1. What devices exist
+# 2. How to connect to them (IP, credentials, platform)
+# 3. What group variables apply to them
+#
+# WHY YAML inventory over INI (for interview):
+# YAML supports nested groups, variables, and is more readable
+# than the flat INI format. It also matches our addressing.yaml
+# structure, making it easier to keep them in sync.
+#
+# NOTE: Management IPs point to EVE-NG device management interfaces.
+# When EVE-NG is not running, these won't be reachable — that's expected.
+# The automation is designed to work against live EVE-NG labs.
+
+---
+all:
+  vars:
+    # Global connection settings
+    ansible_connection: ansible.netcommon.network_cli
+    ansible_user: admin
+    ansible_password: "{{ vault_device_password }}"  # Encrypted with ansible-vault
+    ansible_become: true
+    ansible_become_method: enable
+
+  children:
+    # ============================================================
+    # By Vendor — determines which Ansible collection to use
+    # ============================================================
+    cisco_devices:
+      vars:
+        ansible_network_os: cisco.ios.ios
+        vendor: cisco
+        config_template_dir: cisco_ios
+      children:
+        cisco_core_routers:
+          hosts: {}
+        cisco_transit_routers:
+          hosts: {}
+
+    arista_devices:
+      vars:
+        ansible_network_os: arista.eos.eos
+        vendor: arista
+        config_template_dir: arista_eos
+        # Arista eAPI settings for programmatic access
+        ansible_httpapi_use_ssl: true
+        ansible_httpapi_validate_certs: false
+      children:
+        arista_spine_switches:
+          hosts: {}
+        arista_leaf_switches:
+          hosts: {}
+
+    juniper_devices:
+      vars:
+        ansible_network_os: junipernetworks.junos.junos
+        ansible_connection: ansible.netcommon.netconf
+        vendor: juniper
+        config_template_dir: junos
+      children:
+        juniper_edge_routers:
+          hosts: {}
+
+    # ============================================================
+    # By Site — determines OSPF area, BGP config, addressing
+    # ============================================================
+    dc_east:
+      vars:
+        site_id: 1
+        site_name: dc-east
+        ospf_area: "0.0.0.1"
+        ospf_process_id: 1
+        description: "Primary data center — East Coast"
+      hosts:
+        dc-east-core-rtr-01:
+          ansible_host: "10.1.1.1"
+          loopback_ip: "10.1.0.1/32"
+          role: core_router
+          bgp_role: route_reflector
+          device_group: cisco_core_routers
+        dc-east-core-rtr-02:
+          ansible_host: "10.1.1.2"
+          loopback_ip: "10.1.0.2/32"
+          role: core_router
+          bgp_role: route_reflector
+          device_group: cisco_core_routers
+        dc-east-spine-sw-01:
+          ansible_host: "10.1.1.11"
+          loopback_ip: "10.1.0.11/32"
+          role: spine_switch
+          device_group: arista_spine_switches
+        dc-east-spine-sw-02:
+          ansible_host: "10.1.1.12"
+          loopback_ip: "10.1.0.12/32"
+          role: spine_switch
+          device_group: arista_spine_switches
+        dc-east-leaf-sw-01:
+          ansible_host: "10.1.1.21"
+          loopback_ip: "10.1.0.21/32"
+          role: leaf_switch
+          device_group: arista_leaf_switches
+        dc-east-leaf-sw-02:
+          ansible_host: "10.1.1.22"
+          loopback_ip: "10.1.0.22/32"
+          role: leaf_switch
+          device_group: arista_leaf_switches
+
+    dc_west:
+      vars:
+        site_id: 2
+        site_name: dc-west
+        ospf_area: "0.0.0.2"
+        ospf_process_id: 1
+        description: "Secondary data center — West Coast"
+      hosts:
+        dc-west-core-rtr-01:
+          ansible_host: "10.2.1.1"
+          loopback_ip: "10.2.0.1/32"
+          role: core_router
+          device_group: cisco_core_routers
+        dc-west-spine-sw-01:
+          ansible_host: "10.2.1.11"
+          loopback_ip: "10.2.0.11/32"
+          role: spine_switch
+          device_group: arista_spine_switches
+
+    dr_site:
+      vars:
+        site_id: 3
+        site_name: dr-site
+        ospf_area: "0.0.0.3"
+        ospf_process_id: 1
+        description: "Disaster recovery site"
+      hosts:
+        dr-site-core-rtr-01:
+          ansible_host: "10.3.1.1"
+          loopback_ip: "10.3.0.1/32"
+          role: core_router
+          device_group: cisco_core_routers
+
+    colo_nyse:
+      vars:
+        site_id: 4
+        site_name: colo-nyse
+        ospf_area: "0.0.0.4"
+        ospf_process_id: 1
+        exchange: nyse
+        exchange_asn: 11111
+        description: "NYSE exchange colocation"
+      hosts:
+        colo-nyse-edge-rtr-01:
+          ansible_host: "10.4.1.1"
+          loopback_ip: "10.4.0.1/32"
+          role: edge_router
+          device_group: juniper_edge_routers
+        colo-nyse-edge-rtr-02:
+          ansible_host: "10.4.1.2"
+          loopback_ip: "10.4.0.2/32"
+          role: edge_router
+          device_group: juniper_edge_routers
+
+    colo_cme:
+      vars:
+        site_id: 5
+        site_name: colo-cme
+        ospf_area: "0.0.0.5"
+        ospf_process_id: 1
+        exchange: cme
+        exchange_asn: 22222
+        description: "CME exchange colocation"
+      hosts:
+        colo-cme-edge-rtr-01:
+          ansible_host: "10.5.1.1"
+          loopback_ip: "10.5.0.1/32"
+          role: edge_router
+          device_group: juniper_edge_routers
+        colo-cme-edge-rtr-02:
+          ansible_host: "10.5.1.2"
+          loopback_ip: "10.5.0.2/32"
+          role: edge_router
+          device_group: juniper_edge_routers
+
+    colo_nasdaq:
+      vars:
+        site_id: 6
+        site_name: colo-nasdaq
+        ospf_area: "0.0.0.6"
+        ospf_process_id: 1
+        exchange: nasdaq
+        exchange_asn: 33333
+        description: "NASDAQ exchange colocation"
+      hosts:
+        colo-nasdaq-edge-rtr-01:
+          ansible_host: "10.6.1.1"
+          loopback_ip: "10.6.0.1/32"
+          role: edge_router
+          device_group: juniper_edge_routers
+        colo-nasdaq-edge-rtr-02:
+          ansible_host: "10.6.1.2"
+          loopback_ip: "10.6.0.2/32"
+          role: edge_router
+          device_group: juniper_edge_routers
+
+    # ============================================================
+    # By Role — for role-specific playbooks
+    # ============================================================
+    core_routers:
+      hosts:
+        dc-east-core-rtr-01: {}
+        dc-east-core-rtr-02: {}
+        dc-west-core-rtr-01: {}
+        dr-site-core-rtr-01: {}
+
+    edge_routers:
+      hosts:
+        colo-nyse-edge-rtr-01: {}
+        colo-nyse-edge-rtr-02: {}
+        colo-cme-edge-rtr-01: {}
+        colo-cme-edge-rtr-02: {}
+        colo-nasdaq-edge-rtr-01: {}
+        colo-nasdaq-edge-rtr-02: {}
+
+    route_reflectors:
+      hosts:
+        dc-east-core-rtr-01: {}
+        dc-east-core-rtr-02: {}

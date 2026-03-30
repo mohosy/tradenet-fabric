@@ -1,0 +1,132 @@
+# Chaos Scenario: Link Failure
+# =============================
+# Simulates link failures between sites and measures failover time.
+#
+# WHY THIS MATTERS (for interview):
+# A link failure during market hours at a trading firm is a critical event.
+# The network MUST fail over to a backup path within milliseconds.
+# This scenario validates that:
+# 1. The SDN controller detects the failure
+# 2. An alternate path is computed
+# 3. Traffic is rerouted within the convergence budget
+# 4. No packets are lost (or loss is within acceptable bounds)
+#
+# The sub-100ms target mirrors real trading infrastructure requirements.
+
+---
+name: "Link Failure — DC-East to NYSE Primary"
+description: >
+  Kill the primary link between DC-East and NYSE colocation.
+  Validate that traffic fails over to the backup path through
+  DC-East-Core-02 within 100ms.
+
+# What we're testing
+target:
+  link:
+    src: "dc-east-core-01"
+    dst: "colo-nyse-edge-01"
+
+# Pre-conditions (verify before running)
+preconditions:
+  - type: path_exists
+    src: "dc-east-core-01"
+    dst: "nyse-exchange"
+    description: "Primary path to NYSE must exist"
+
+  - type: link_state
+    src: "dc-east-core-01"
+    dst: "colo-nyse-edge-01"
+    expected_state: "up"
+    description: "Primary link must be up"
+
+# The fault injection
+fault:
+  type: link_down
+  duration_seconds: 30    # Keep link down for 30 seconds
+  # In production, you'd use the EVE-NG API to shut the interface.
+  # For the SDN controller, we use the /api/link/state endpoint.
+
+# What we measure
+measurements:
+  - name: "failover_time_ms"
+    description: "Time from link down to new path being active"
+    target: 100          # Must be under 100ms
+    unit: "ms"
+
+  - name: "packet_loss_count"
+    description: "Number of packets lost during failover"
+    target: 0            # Ideally zero
+    unit: "packets"
+
+  - name: "new_path_latency_us"
+    description: "Latency of the new path after failover"
+    unit: "μs"
+
+  - name: "new_path_hops"
+    description: "Hop count of the new path"
+    unit: "hops"
+
+# Post-conditions (verify after fault is cleared)
+postconditions:
+  - type: path_exists
+    src: "dc-east-core-01"
+    dst: "nyse-exchange"
+    description: "Path to NYSE must still exist (via backup)"
+
+  - type: link_state
+    src: "dc-east-core-01"
+    dst: "colo-nyse-edge-01"
+    expected_state: "down"
+    description: "Primary link should be down"
+
+# Recovery validation
+recovery:
+  action: restore_link
+  verify:
+    - type: link_state
+      src: "dc-east-core-01"
+      dst: "colo-nyse-edge-01"
+      expected_state: "up"
+      description: "Primary link should be restored"
+
+    - type: path_optimal
+      src: "dc-east-core-01"
+      dst: "nyse-exchange"
+      description: "Should revert to optimal path after recovery"
+
+---
+name: "Link Failure — Inter-DC WAN"
+description: >
+  Kill the WAN link between DC-East and DC-West.
+  Validate that DC-West traffic to exchanges reroutes
+  through DR-Site or alternative paths.
+
+target:
+  link:
+    src: "dc-east-core-01"
+    dst: "dc-west-core-01"
+
+preconditions:
+  - type: path_exists
+    src: "dc-west-core-01"
+    dst: "nyse-exchange"
+
+fault:
+  type: link_down
+  duration_seconds: 30
+
+measurements:
+  - name: "failover_time_ms"
+    target: 500          # WAN failover can be slower
+    unit: "ms"
+
+  - name: "dc_west_reachability"
+    description: "Can DC-West still reach all exchanges?"
+    target: true
+    unit: "boolean"
+
+postconditions:
+  - type: path_exists
+    src: "dc-west-core-01"
+    dst: "nyse-exchange"
+    description: "DC-West must still reach NYSE via alternate path"

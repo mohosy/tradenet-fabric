@@ -1,0 +1,107 @@
+# TradeNet Fabric — Master Site Playbook
+# ========================================
+# This is the top-level playbook that deploys the ENTIRE network
+# configuration from scratch. Running this single playbook provisions
+# every device in the topology with the correct config.
+#
+# Usage:
+#   ansible-playbook -i inventory/hosts.yaml playbooks/site.yaml
+#
+# WHY A SINGLE ENTRY POINT (for interview):
+# One command to deploy everything. This is the "make deploy" philosophy.
+# You never need to remember which playbook to run for which device —
+# site.yaml does everything in the right order.
+#
+# Order matters:
+# 1. Base config first (management access, NTP, logging)
+# 2. OSPF next (so devices can find each other within a site)
+# 3. BGP after OSPF (BGP sessions use OSPF-learned loopback routes)
+# 4. Security last (firewall rules depend on knowing the full topology)
+
+---
+- name: "Phase 1: Base Configuration — All Devices"
+  hosts: all
+  gather_facts: false
+  tags: [base]
+  tasks:
+    - name: "Deploy base config ({{ vendor }})"
+      ansible.netcommon.cli_config:
+        config: "{{ lookup('template', '../templates/' + config_template_dir + '/base.j2') }}"
+      when: vendor != 'juniper'
+
+    - name: "Deploy base config (Juniper)"
+      junipernetworks.junos.junos_config:
+        src: "{{ '../templates/junos/base.j2' }}"
+        confirm_commit: true
+      when: vendor == 'juniper'
+
+- name: "Phase 2: OSPF — All Routing Devices"
+  hosts: core_routers:edge_routers:arista_spine_switches
+  gather_facts: false
+  tags: [ospf, routing]
+  tasks:
+    - name: "Deploy OSPF config ({{ vendor }})"
+      ansible.netcommon.cli_config:
+        config: "{{ lookup('template', '../templates/' + config_template_dir + '/ospf.j2') }}"
+      when: vendor != 'juniper'
+
+    - name: "Deploy OSPF config (Juniper)"
+      junipernetworks.junos.junos_config:
+        src: "{{ '../templates/junos/ospf.j2' }}"
+        confirm_commit: true
+      when: vendor == 'juniper'
+
+- name: "Phase 3: BGP — Core and Edge Routers"
+  hosts: core_routers:edge_routers
+  gather_facts: false
+  tags: [bgp, routing]
+  tasks:
+    - name: "Deploy BGP config ({{ vendor }})"
+      ansible.netcommon.cli_config:
+        config: "{{ lookup('template', '../templates/' + config_template_dir + '/bgp.j2') }}"
+      when: vendor != 'juniper'
+
+    - name: "Deploy BGP config (Juniper)"
+      junipernetworks.junos.junos_config:
+        src: "{{ '../templates/junos/bgp.j2' }}"
+        confirm_commit: true
+      when: vendor == 'juniper'
+
+- name: "Phase 4: Security Zones — Edge Routers (Juniper)"
+  hosts: edge_routers
+  gather_facts: false
+  tags: [security, firewall]
+  tasks:
+    - name: "Deploy security zone config"
+      junipernetworks.junos.junos_config:
+        src: "{{ '../templates/junos/security_zones.j2' }}"
+        confirm_commit: true
+
+- name: "Phase 5: Verification"
+  hosts: all
+  gather_facts: false
+  tags: [verify]
+  tasks:
+    - name: "Verify OSPF neighbors (Cisco)"
+      cisco.ios.ios_command:
+        commands:
+          - show ip ospf neighbor
+      register: ospf_output
+      when: vendor == 'cisco'
+
+    - name: "Verify BGP peers (Cisco)"
+      cisco.ios.ios_command:
+        commands:
+          - show ip bgp summary
+      register: bgp_output
+      when: vendor == 'cisco' and role == 'core_router'
+
+    - name: "Display OSPF status"
+      debug:
+        var: ospf_output.stdout_lines
+      when: ospf_output is defined and ospf_output is not skipped
+
+    - name: "Display BGP status"
+      debug:
+        var: bgp_output.stdout_lines
+      when: bgp_output is defined and bgp_output is not skipped

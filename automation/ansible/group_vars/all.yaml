@@ -1,0 +1,72 @@
+# TradeNet Fabric — Global Variables
+# ===================================
+# Variables shared across ALL devices regardless of vendor or site.
+# These define the firm-wide standards.
+
+---
+# BGP Configuration
+bgp:
+  internal_asn: 65001
+  route_reflectors:
+    - "10.1.0.1"   # dc-east-core-rtr-01
+    - "10.2.0.1"   # dc-west-core-rtr-01
+  timers:
+    keepalive: 10    # Aggressive BGP timers for faster detection
+    holdtime: 30     # 3x keepalive (standard ratio)
+    # WHY aggressive timers (for interview):
+    # Default BGP timers are 60s/180s — way too slow for a trading firm.
+    # We use 10s/30s as a middle ground. Even faster detection comes from
+    # BFD (Bidirectional Forwarding Detection) which we configure separately.
+
+# OSPF Configuration
+ospf:
+  reference_bandwidth: 100000  # 100Gbps reference for cost calculation
+  # WHY 100Gbps reference (for interview):
+  # OSPF cost = reference_bandwidth / interface_bandwidth
+  # Default reference is 100Mbps, which means all links >= 100Mbps
+  # get cost 1 (no differentiation). With 100Gbps reference:
+  #   1Gbps link  = cost 100
+  #   10Gbps link = cost 10
+  #   100Gbps link = cost 1
+  # This gives meaningful differentiation between link speeds.
+  hello_interval: 1      # 1 second hello (fast detection)
+  dead_interval: 4       # 4x hello (standard)
+  bfd_enabled: true      # BFD for sub-second failure detection
+
+# NTP Servers (time synchronization is critical for trading)
+ntp_servers:
+  - "10.1.1.100"    # Primary NTP (DC-East)
+  - "10.2.1.100"    # Secondary NTP (DC-West)
+
+# DNS Servers
+dns_servers:
+  - "10.1.1.101"
+  - "10.2.1.101"
+
+# Syslog (centralized logging)
+syslog:
+  server: "10.1.1.102"
+  facility: local7
+  severity: informational
+
+# SNMP (monitoring)
+snmp:
+  community: "{{ vault_snmp_community }}"
+  location: "TradeNet Fabric Lab"
+  contact: "netops@tradenet.local"
+
+# Management ACL (restrict management access)
+management_acl:
+  name: MGMT-ACCESS
+  networks:
+    - "10.1.1.0/24"    # DC-East management
+    - "10.2.1.0/24"    # DC-West management
+    - "10.3.1.0/24"    # DR-Site management
+    - "10.100.0.0/16"  # Automation server network
+
+# Banner
+banner: |
+  ############################################################
+  #  TradeNet Fabric — Authorized Access Only                #
+  #  All sessions are monitored and logged.                  #
+  ############################################################

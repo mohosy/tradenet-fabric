@@ -1,0 +1,44 @@
+{# Arista EOS — OSPF Configuration Template
+   ==========================================
+   Same OSPF features as Cisco, but Arista syntax.
+   Notice the differences:
+   - "ip routing" must be explicitly enabled
+   - Interface config uses indented blocks
+   - BFD syntax is slightly different
+#}
+!
+ip routing
+!
+router ospf {{ ospf_process_id }}
+   router-id {{ loopback_ip | ipaddr('address') }}
+   auto-cost reference-bandwidth {{ ospf.reference_bandwidth }}
+   timers throttle spf 50 100 5000
+   timers throttle lsa all 0 100 5000
+   log-adjacency-changes detail
+   max-lsa 12000
+!
+{% if ospf_interfaces is defined %}
+{% for intf in ospf_interfaces %}
+interface {{ intf.name }}
+   ip ospf area {{ ospf_area }}
+   ip ospf hello-interval {{ ospf.hello_interval }}
+   ip ospf dead-interval {{ ospf.dead_interval }}
+{% if ospf.bfd_enabled %}
+   ip ospf bfd
+{% endif %}
+{% if intf.cost is defined %}
+   ip ospf cost {{ intf.cost }}
+{% endif %}
+{% endfor %}
+{% endif %}
+!
+interface Loopback0
+   ip ospf area {{ ospf_area }}
+!
+{% if ospf.bfd_enabled %}
+! === BFD (Arista syntax) ===
+bfd
+   interval 100 min-rx 100 multiplier 3
+{% endif %}
+!
+end

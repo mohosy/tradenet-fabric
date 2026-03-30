@@ -1,0 +1,247 @@
+# TradeNet Fabric — IP Addressing Plan
+# All addresses are RFC 1918 private space (10.0.0.0/8)
+# This file is the single source of truth for all IP assignments.
+# Automation templates pull from this file — never hardcode addresses.
+
+---
+# ============================================================
+# DESIGN NOTES (for interview)
+# ============================================================
+# We use a structured /8 block carved into a hierarchical scheme:
+#   10.{site}.{function}.{host}/mask
+#
+# Site numbering:
+#   1 = DC-East (primary)
+#   2 = DC-West (secondary)
+#   3 = DR-Site (disaster recovery)
+#   4 = Colo-NYSE
+#   5 = Colo-CME
+#   6 = Colo-NASDAQ
+#   7 = Transit/Internet simulation
+#
+# Function numbering (per site):
+#   0 = Loopbacks
+#   1 = Management
+#   10-19 = Backbone/core links
+#   20-29 = Access/server links
+#   30-39 = Inter-site WAN links
+#   100-109 = BGP peering links
+#   200-209 = Multicast rendezvous
+#
+# Why this scheme?
+# - Predictable: given a site and function, you can guess the address
+# - Summarizable: each site is a /16, easy to create aggregate routes
+# - Debuggable: seeing 10.4.x.x in a packet capture, you immediately
+#   know it's Colo-NYSE traffic
+# ============================================================
+
+sites:
+  dc-east:
+    id: 1
+    asn: 65001          # Private ASN for iBGP
+    ospf_area: 0.0.0.1
+    description: "Primary data center — East Coast"
+    loopbacks:
+      core-rtr-01: "10.1.0.1/32"
+      core-rtr-02: "10.1.0.2/32"
+      spine-sw-01: "10.1.0.11/32"
+      spine-sw-02: "10.1.0.12/32"
+      leaf-sw-01:  "10.1.0.21/32"
+      leaf-sw-02:  "10.1.0.22/32"
+    management:
+      subnet: "10.1.1.0/24"
+    backbone_links:
+      core-rtr-01_to_core-rtr-02: "10.1.10.0/30"
+      spine-sw-01_to_spine-sw-02: "10.1.10.4/30"
+      core-rtr-01_to_spine-sw-01: "10.1.10.8/30"
+      core-rtr-01_to_spine-sw-02: "10.1.10.12/30"
+      core-rtr-02_to_spine-sw-01: "10.1.10.16/30"
+      core-rtr-02_to_spine-sw-02: "10.1.10.20/30"
+    server_links:
+      leaf-sw-01_servers: "10.1.20.0/24"
+      leaf-sw-02_servers: "10.1.21.0/24"
+
+  dc-west:
+    id: 2
+    asn: 65001          # Same ASN — iBGP within the firm
+    ospf_area: 0.0.0.2
+    description: "Secondary data center — West Coast"
+    loopbacks:
+      core-rtr-01: "10.2.0.1/32"
+      core-rtr-02: "10.2.0.2/32"
+      spine-sw-01: "10.2.0.11/32"
+      spine-sw-02: "10.2.0.12/32"
+      leaf-sw-01:  "10.2.0.21/32"
+      leaf-sw-02:  "10.2.0.22/32"
+    management:
+      subnet: "10.2.1.0/24"
+    backbone_links:
+      core-rtr-01_to_core-rtr-02: "10.2.10.0/30"
+      spine-sw-01_to_spine-sw-02: "10.2.10.4/30"
+      core-rtr-01_to_spine-sw-01: "10.2.10.8/30"
+      core-rtr-01_to_spine-sw-02: "10.2.10.12/30"
+      core-rtr-02_to_spine-sw-01: "10.2.10.16/30"
+      core-rtr-02_to_spine-sw-02: "10.2.10.20/30"
+    server_links:
+      leaf-sw-01_servers: "10.2.20.0/24"
+      leaf-sw-02_servers: "10.2.21.0/24"
+
+  dr-site:
+    id: 3
+    asn: 65001
+    ospf_area: 0.0.0.3
+    description: "Disaster recovery site"
+    loopbacks:
+      core-rtr-01: "10.3.0.1/32"
+      spine-sw-01: "10.3.0.11/32"
+      leaf-sw-01:  "10.3.0.21/32"
+    management:
+      subnet: "10.3.1.0/24"
+    backbone_links:
+      core-rtr-01_to_spine-sw-01: "10.3.10.0/30"
+    server_links:
+      leaf-sw-01_servers: "10.3.20.0/24"
+
+  colo-nyse:
+    id: 4
+    asn: 65001
+    ospf_area: 0.0.0.4
+    description: "NYSE exchange colocation"
+    loopbacks:
+      edge-rtr-01: "10.4.0.1/32"
+      edge-rtr-02: "10.4.0.2/32"
+      colo-sw-01:  "10.4.0.11/32"
+    management:
+      subnet: "10.4.1.0/24"
+    backbone_links:
+      edge-rtr-01_to_edge-rtr-02: "10.4.10.0/30"
+      edge-rtr-01_to_colo-sw-01: "10.4.10.4/30"
+      edge-rtr-02_to_colo-sw-01: "10.4.10.8/30"
+    bgp_peering:
+      # eBGP peering with NYSE exchange
+      edge-rtr-01_to_nyse: "10.4.100.0/30"
+      edge-rtr-02_to_nyse: "10.4.100.4/30"
+    multicast:
+      rp_address: "10.4.200.1"   # PIM-SM Rendezvous Point
+
+  colo-cme:
+    id: 5
+    asn: 65001
+    ospf_area: 0.0.0.5
+    description: "CME exchange colocation"
+    loopbacks:
+      edge-rtr-01: "10.5.0.1/32"
+      edge-rtr-02: "10.5.0.2/32"
+      colo-sw-01:  "10.5.0.11/32"
+    management:
+      subnet: "10.5.1.0/24"
+    backbone_links:
+      edge-rtr-01_to_edge-rtr-02: "10.5.10.0/30"
+      edge-rtr-01_to_colo-sw-01: "10.5.10.4/30"
+      edge-rtr-02_to_colo-sw-01: "10.5.10.8/30"
+    bgp_peering:
+      edge-rtr-01_to_cme: "10.5.100.0/30"
+      edge-rtr-02_to_cme: "10.5.100.4/30"
+    multicast:
+      rp_address: "10.5.200.1"
+
+  colo-nasdaq:
+    id: 6
+    asn: 65001
+    ospf_area: 0.0.0.6
+    description: "NASDAQ exchange colocation"
+    loopbacks:
+      edge-rtr-01: "10.6.0.1/32"
+      edge-rtr-02: "10.6.0.2/32"
+      colo-sw-01:  "10.6.0.11/32"
+    management:
+      subnet: "10.6.1.0/24"
+    backbone_links:
+      edge-rtr-01_to_edge-rtr-02: "10.6.10.0/30"
+      edge-rtr-01_to_colo-sw-01: "10.6.10.4/30"
+      edge-rtr-02_to_colo-sw-01: "10.6.10.8/30"
+    bgp_peering:
+      edge-rtr-01_to_nasdaq: "10.6.100.0/30"
+      edge-rtr-02_to_nasdaq: "10.6.100.4/30"
+    multicast:
+      rp_address: "10.6.200.1"
+
+  transit:
+    id: 7
+    description: "Simulated internet transit providers"
+    providers:
+      transit-a:
+        asn: 64501       # Simulated transit provider ASN
+        peering_links:
+          to_dc_east: "10.7.100.0/30"
+          to_dc_west: "10.7.100.4/30"
+      transit-b:
+        asn: 64502
+        peering_links:
+          to_dc_east: "10.7.100.8/30"
+          to_dr_site: "10.7.100.12/30"
+
+# ============================================================
+# Inter-site WAN Links
+# These connect the data centers and colocations to each other
+# ============================================================
+wan_links:
+  dc_east_to_dc_west:
+    primary: "10.100.1.0/30"
+    backup:  "10.100.1.4/30"
+  dc_east_to_dr_site:
+    primary: "10.100.2.0/30"
+  dc_west_to_dr_site:
+    primary: "10.100.3.0/30"
+  dc_east_to_colo_nyse:
+    primary: "10.100.10.0/30"
+    backup:  "10.100.10.4/30"
+  dc_east_to_colo_cme:
+    primary: "10.100.11.0/30"
+  dc_east_to_colo_nasdaq:
+    primary: "10.100.12.0/30"
+  dc_west_to_colo_cme:
+    primary: "10.100.13.0/30"
+  dc_west_to_colo_nasdaq:
+    primary: "10.100.14.0/30"
+
+# ============================================================
+# Simulated Exchange ASNs (for eBGP peering)
+# ============================================================
+exchanges:
+  nyse:
+    asn: 11111
+    prefixes:
+      - "198.51.100.0/24"    # Simulated NYSE market data prefix
+  cme:
+    asn: 22222
+    prefixes:
+      - "203.0.113.0/24"     # Simulated CME market data prefix
+  nasdaq:
+    asn: 33333
+    prefixes:
+      - "192.0.2.0/24"       # Simulated NASDAQ market data prefix
+
+# ============================================================
+# Multicast Addressing (for market data distribution)
+# ============================================================
+multicast:
+  groups:
+    nyse_market_data:  "239.1.1.0/24"
+    cme_market_data:   "239.1.2.0/24"
+    nasdaq_market_data: "239.1.3.0/24"
+  global_rp: "10.1.0.1"       # DC-East core-rtr-01 as global RP
+
+# ============================================================
+# BGP Design Summary
+# ============================================================
+bgp:
+  internal_asn: 65001          # All our sites share one ASN (iBGP)
+  route_reflectors:
+    - "10.1.0.1"               # DC-East core-rtr-01
+    - "10.2.0.1"               # DC-West core-rtr-01
+  confederation: false          # Using RR, not confederation
+  # Why RR over confederation?
+  # Route reflectors are simpler to operate and debug.
+  # Confederations add sub-AS complexity that isn't needed at our scale.
+  # Jane Street's network is large but not ISP-scale — RR is the right fit.
