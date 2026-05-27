@@ -49,3 +49,4 @@ dashboard/frontend/node_modules/
 dashboard/frontend/out/
 dashboard/frontend/.next/
 dashboard/frontend/.vercel/
+dashboard/frontend/next-env.d.ts
