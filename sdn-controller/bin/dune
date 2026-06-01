@@ -1,3 +1,0 @@
-(executable
- (name main)
- (libraries topology pathcomp api dream lwt lwt.unix yojson))

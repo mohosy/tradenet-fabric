@@ -1,5 +1,5 @@
 // Simulated topology data matching our real SDN controller output.
-// In production, this fetches from the OCaml REST API at localhost:9090.
+// In production, this fetches from the Python REST API at localhost:9090.
 
 export interface Device {
   id: string;

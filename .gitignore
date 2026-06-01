@@ -1,16 +1,10 @@
-# OCaml
-_build/
-*.byte
-*.native
-*.install
-.merlin
-
 # Python
 __pycache__/
 *.pyc
 .venv/
 venv/
 *.egg-info/
+.pytest_cache/
 
 # Ansible
 *.retry

@@ -610,7 +610,7 @@ export default function Dashboard() {
         {/* Footer */}
         <footer className="text-center py-6 text-xs text-[var(--text-muted)] border-t border-[var(--border)]">
           <p>TradeNet Fabric &mdash; SDN Controller Dashboard</p>
-          <p className="mt-1">OCaml + React + eBPF &middot; Built for Jane Street Network Engineering</p>
+          <p className="mt-1">Python + React + eBPF &middot; Built for Jane Street Network Engineering</p>
         </footer>
       </main>
     </div>

@@ -1,5 +1,0 @@
-(library
- (name topology)
- (libraries ocamlgraph yojson)
- (preprocess
-  (pps ppx_deriving.show ppx_deriving.eq)))

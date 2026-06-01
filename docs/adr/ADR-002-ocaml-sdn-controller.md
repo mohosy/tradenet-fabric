@@ -1,7 +1,10 @@
 # ADR-002: OCaml for the SDN Controller
 
 ## Status
-Accepted
+**Superseded** — the SDN controller has been reimplemented in **Python** (Flask
+REST API, custom Dijkstra, pytest + property-based tests). The behavior, REST API
+contract, and test coverage are preserved; only the implementation language
+changed. The original OCaml rationale is kept below as a historical record.
 
 ## Context
 We need to choose a language for the SDN controller — the central component that ingests telemetry, computes optimal paths, and pushes routing policy changes to network devices.

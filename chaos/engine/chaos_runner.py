@@ -322,7 +322,7 @@ def main():
     console.print("Checking SDN controller health...")
     if not engine.check_health():
         console.print("[red]SDN controller is not running![/]")
-        console.print("[yellow]Start it with: cd sdn-controller && dune exec bin/main.exe[/]")
+        console.print("[yellow]Start it with: cd sdn-controller && python3 -m tradenet_sdn[/]")
 
         if "--demo" in sys.argv:
             console.print("\n[yellow]Running in demo mode...[/]")

@@ -14,20 +14,15 @@
 #   make clean      — Remove build artifacts
 
 .PHONY: setup deploy teardown test chaos bench lint clean \
-        setup-ocaml setup-python setup-ebpf \
+        setup-python setup-ebpf \
         deploy-topology deploy-configs deploy-sdn deploy-monitoring deploy-dashboard \
         test-unit test-property test-integration
 
 # ============================================================
 # Setup — Install all dependencies
 # ============================================================
-setup: setup-ocaml setup-python
+setup: setup-python
 	@echo "All dependencies installed."
-
-setup-ocaml:
-	@echo "Installing OCaml toolchain..."
-	opam install . --deps-only --yes
-	@echo "OCaml dependencies installed."
 
 setup-python:
 	@echo "Installing Python dependencies..."
@@ -56,7 +51,7 @@ deploy-configs:
 
 deploy-sdn:
 	@echo "Starting SDN controller..."
-	cd sdn-controller && dune exec bin/main.exe &
+	cd sdn-controller && python3 -m tradenet_sdn &
 
 deploy-monitoring:
 	@echo "Starting monitoring stack..."
@@ -64,7 +59,7 @@ deploy-monitoring:
 
 deploy-dashboard:
 	@echo "Starting dashboard..."
-	# TODO: Start OCaml backend + React frontend
+	# TODO: Start Python controller + Next.js frontend
 
 # ============================================================
 # Teardown — Clean shutdown
@@ -81,11 +76,11 @@ test: test-unit test-property test-integration
 
 test-unit:
 	@echo "Running unit tests..."
-	cd sdn-controller && dune runtest
+	cd sdn-controller && python3 -m pytest tests/test_network_graph.py -q
 
 test-property:
 	@echo "Running property-based tests..."
-	cd sdn-controller && dune exec test/property/run_properties.exe
+	cd sdn-controller && python3 -m pytest tests/test_properties.py -q
 
 test-integration:
 	@echo "Running integration tests..."
@@ -96,7 +91,7 @@ test-integration:
 # ============================================================
 chaos:
 	@echo "Running chaos test suite..."
-	python3 chaos/engine/run_all.py
+	python3 chaos/engine/chaos_runner.py
 	@echo "Chaos report: chaos/reports/latest.html"
 
 # ============================================================
@@ -104,7 +99,7 @@ chaos:
 # ============================================================
 bench:
 	@echo "Running benchmarks..."
-	python3 benchmarks/scripts/run_all.py
+	python3 benchmarks/scripts/run_benchmarks.py
 	@echo "Benchmark report: benchmarks/reports/latest.html"
 
 # ============================================================
@@ -114,14 +109,14 @@ lint:
 	@echo "Validating configurations..."
 	python3 automation/ci/validate_configs.py
 	python3 automation/ci/lint_templates.py
-	cd sdn-controller && dune build @fmt
+	python3 -m py_compile sdn-controller/tradenet_sdn/*.py
 	@echo "All validations passed."
 
 # ============================================================
 # Clean
 # ============================================================
 clean:
-	cd sdn-controller && dune clean
 	find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+	find . -name ".pytest_cache" -type d -exec rm -rf {} + 2>/dev/null || true
 	find . -name "*.pyc" -delete 2>/dev/null || true
 	@echo "Clean."

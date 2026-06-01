@@ -1,3 +1,0 @@
-(test
- (name test_properties)
- (libraries topology pathcomp qcheck qcheck-alcotest alcotest))

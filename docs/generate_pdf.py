@@ -1,5 +1,7 @@
 """Generate the TradeNet Fabric Interview Prep PDF — Light theme for readability."""
 
+import os
+
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.colors import HexColor, black, white
@@ -80,7 +82,7 @@ def SEC(t):
 
 
 def build_pdf():
-    outpath = "/Users/mo/Downloads/janestreet_project1/docs/interview-prep.pdf"
+    outpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "interview-prep.pdf")
     doc = SimpleDocTemplate(
         outpath, pagesize=letter,
         topMargin=0.65 * inch, bottomMargin=0.55 * inch,
@@ -99,13 +101,13 @@ def build_pdf():
     story.append(Paragraph("Interview Prep Guide \u2014 Network Engineering", S_SUBTITLE))
     story.append(hr())
     story.append(S(8))
-    story.append(B("A comprehensive Q&A guide covering networking fundamentals, OCaml programming, "
+    story.append(B("A comprehensive Q&A guide covering networking fundamentals, Python programming, "
                     "systems infrastructure, and project-specific questions. Every concept explained from first principles \u2014 no prior networking knowledge assumed."))
     story.append(S(16))
 
     stats = [
-        ["29 tests passing", "1.52ms p99 path comp", "1.98ms p99 failover"],
-        ["8 QCheck properties", "3 chaos scenarios", "6 architecture decisions"],
+        ["29 tests passing", "1.84ms p99 path comp", "2.88ms p99 failover"],
+        ["8 property tests", "3 chaos scenarios", "6 architecture decisions"],
         ["12 devices \u00b7 3 vendors", "4 security zones", "314 auto-gen firewall rules"],
     ]
     t = Table(stats, colWidths=[2.2 * inch, 2.2 * inch, 2.2 * inch])
@@ -126,7 +128,7 @@ def build_pdf():
     story.append(BB("Contents"))
     for item in [
         "Section 1: Routing Protocols (Q1\u2013Q6)",
-        "Section 2: OCaml & Programming (Q7\u2013Q9)",
+        "Section 2: Python & Programming (Q7\u2013Q9)",
         "Section 3: Systems & Infrastructure (Q10\u2013Q12)",
         "Section 4: Project-Specific Questions (Q13\u2013Q16)",
         "Section 5: Bonus Questions (Q17\u2013Q30)",
@@ -190,7 +192,7 @@ def build_pdf():
     story.append(BI("OSPF: Check if both have identical link-state databases. MTU mismatch is a common sneaky cause."))
     story.append(BI("BGP: Check next-hop reachability. BGP may install a route with unreachable next-hop."))
     story.append(BI("Redistribution: OSPF\u2192BGP\u2192OSPF feedback loops need prefix filters."))
-    story.append(IT("Interview tip: Our QCheck tests verify 'no path visits the same node twice' across 1,600 random topologies \u2014 loops are mathematically impossible in our path computation."))
+    story.append(IT("Interview tip: Our property tests verify 'no path visits the same node twice' across 1,600 random topologies \u2014 loops are mathematically impossible in our path computation."))
 
     story.append(Q("Q5. Explain the BGP path selection algorithm."))
     story.append(B("When a router knows about the SAME destination from multiple sources, BGP uses ordered tiebreakers. First difference wins:"))
@@ -219,18 +221,18 @@ def build_pdf():
     story.append(PageBreak())
 
     # ======================== SECTION 2 ========================
-    story.append(SEC("Section 2: OCaml & Programming"))
+    story.append(SEC("Section 2: Python & Programming"))
     story.append(hr())
 
-    story.append(Q("Q7. Why is OCaml's type system beneficial for a network controller?"))
-    story.append(B("A <b>type system</b> enforces rules about data. Python: errors at runtime (production). OCaml: errors caught by compiler before code runs (your laptop)."))
-    story.append(BB("1. Exhaustive pattern matching:"))
-    story.append(BI("link_state has Up, Down, Degraded. Forget to handle Degraded? Compiler REFUSES to build. Python would silently do nothing."))
-    story.append(BB("2. Can't mix up different number types:"))
-    story.append(BI("Latency (200.0) and utilization (0.45) are both numbers. OCaml can make them distinct types. Compiler catches if you pass the wrong one."))
-    story.append(BB("3. Immutable data for safe concurrency:"))
-    story.append(BI("Updating the graph creates a NEW graph. Telemetry collector and path engine work simultaneously without locks. No race conditions. This is why Jane Street chose OCaml."))
-    story.append(IT("Interview tip: 'For a controller pushing routing changes to live routers, a missed case could blackhole traffic. OCaml prevents entire categories of these bugs at compile time.'"))
+    story.append(Q("Q7. Why Python for the SDN controller, and how do you keep it safe?"))
+    story.append(B("The controller ingests telemetry, computes paths, and serves a REST API. Python optimizes for development speed and ecosystem; we buy back the safety a compiler would give us with disciplined design and tests."))
+    story.append(BB("1. One language across the whole stack:"))
+    story.append(BI("The controller, chaos framework, benchmarks, and automation are all Python — no FFI, no context-switching, shared tooling and data models."))
+    story.append(BB("2. Immutable data for safe concurrency:"))
+    story.append(BI("The graph is built from frozen dataclasses; every update returns a NEW graph. The telemetry collector and path engine read consistent snapshots without locks — we just swap the reference atomically."))
+    story.append(BB("3. Safety via enums, type hints, and tests:"))
+    story.append(BI("link_state is an enum (Up, Down, Degraded); records are typed dataclasses. We catch the bugs a compiler would with type hints (mypy-checkable) and a strong suite — 29 tests including property-based checks across 1,600 random topologies."))
+    story.append(IT("Interview tip: 'Python trades compile-time guarantees for velocity and ecosystem. For a controller that pushes routing changes to live routers, we compensate with immutable dataclasses, enums, and property-based tests that prove invariants hold — not just that one example works.'"))
 
     story.append(Q("Q8. What is Dijkstra's algorithm?"))
     story.append(B("Finds the cheapest path from one point to all others in a weighted graph."))
@@ -242,9 +244,9 @@ def build_pdf():
     story.append(BI("5. Repeat until destination reached."))
     story.append(BB("Our key design: parameterized weight function."))
     story.append(BI("Pass a FUNCTION defining 'cost.' Market data: cost = latency. Bulk transfer: cost = inverse bandwidth. Same algorithm, different objectives."))
-    story.append(KP("Performance: 1.52ms p99 for our 12-node topology. O((V+E) log V) complexity."))
+    story.append(KP("Performance: 1.84ms p99 for our 12-node topology. O((V+E) log V) complexity."))
 
-    story.append(Q("Q9. What are property-based tests (QCheck)?"))
+    story.append(Q("Q9. What are property-based tests?"))
     story.append(B("<b>Unit tests:</b> 'This specific input gives this specific output.' One scenario."))
     story.append(B("<b>Property tests:</b> 'For ANY connected graph, a path exists between any two nodes.' Computer generates hundreds of random inputs and checks."))
     story.append(BB("Our 8 properties:"))
@@ -256,7 +258,7 @@ def build_pdf():
     story.append(BI("6. Making a link slower never makes path through it cheaper"))
     story.append(BI("7. JSON roundtrip preserves graph exactly"))
     story.append(BI("8. Market data path always has lowest latency"))
-    story.append(IT("Interview tip: Jane Street uses property-based testing extensively. Our QCheck tests verify 8 invariants across 1,600 random topologies."))
+    story.append(IT("Interview tip: Jane Street uses property-based testing extensively. Our pytest suite verifies 8 invariants across 1,600 random topologies (built by a seeded generator)."))
 
     story.append(PageBreak())
 
@@ -313,8 +315,8 @@ def build_pdf():
     story.append(BI("<b>310ms</b> \u2014 OSPF floods new LSA to all routers."))
     story.append(BI("<b>400ms</b> \u2014 All routers run Dijkstra. New routes computed."))
     story.append(BI("<b>500ms</b> \u2014 Traffic rerouted. Failover complete."))
-    story.append(BI("<b>Meanwhile</b> \u2014 SDN controller detects, runs Dijkstra (1.52ms p99), pushes BGP changes."))
-    story.append(KP("Total SDN failover: 1.98ms p99. Target 100ms. We're 50x under."))
+    story.append(BI("<b>Meanwhile</b> \u2014 SDN controller detects, runs Dijkstra (1.84ms p99), pushes BGP changes."))
+    story.append(KP("Total SDN failover: 2.88ms p99. Target 100ms. We're 35x under."))
 
     story.append(Q("Q16. Why EVE-NG over GNS3 or Containerlab?"))
     story.append(BI("<b>EVE-NG:</b> Web UI, clean multi-vendor support, industry standard for professional labbing."))
@@ -390,7 +392,7 @@ def build_pdf():
 
     story.append(Q("Q28. What does 'convergence' mean?"))
     story.append(B("All routers agreeing on the same routes after a change. Until complete, different routers have different views \u2014 packets may take unexpected paths or get dropped."))
-    story.append(BI("OSPF: <1s with BFD. BGP: 5-30s. Our SDN controller: 1.98ms p99."))
+    story.append(BI("OSPF: <1s with BFD. BGP: 5-30s. Our SDN controller: 2.88ms p99."))
     story.append(KP("During convergence, traffic may be blackholed. Shorter = fewer dropped packets = fewer missed market updates."))
 
     story.append(Q("Q29. Multicast vs unicast?"))
@@ -402,8 +404,8 @@ def build_pdf():
     story.append(B("(Tests self-awareness and engineering maturity.)"))
     story.append(BB("Suggested answer:"))
     story.append(BI("'I'd add gRPC streaming telemetry \u2014 push-based instead of pull-based. Right now the controller polls via REST. In production, devices should continuously stream metrics, reducing detection delay to near-zero.'"))
-    story.append(BI("'I'd also explore OCaml 5's algebraic effects for async I/O instead of Lwt \u2014 newer, cleaner concurrency model. Shows awareness of OCaml ecosystem direction.'"))
-    story.append(IT("This shows you understand the limitation, know the production solution, AND track OCaml's evolution. All strong signals."))
+    story.append(BI("'I'd also move the API to async I/O \u2014 e.g. FastAPI/asyncio \u2014 so telemetry ingestion and path computation don't block each other under load. Shows awareness of where the Python stack is heading.'"))
+    story.append(IT("This shows you understand the limitation, know the production solution, AND track where the Python ecosystem is heading. All strong signals."))
 
     story.append(PageBreak())
 
@@ -413,10 +415,10 @@ def build_pdf():
 
     cheat = [
         ["Metric", "Value", "Context"],
-        ["Path Computation P99", "1.52ms", "Target: 50ms (33x under)"],
-        ["Failover P99", "1.98ms", "Target: 100ms (50x under)"],
-        ["API Health P99", "0.94ms", "Target: 10ms"],
-        ["Unit Tests", "21 passing", "Alcotest framework"],
+        ["Path Computation P99", "1.84ms", "Target: 50ms (27x under)"],
+        ["Failover P99", "2.88ms", "Target: 100ms (35x under)"],
+        ["API Health P99", "1.46ms", "Target: 10ms"],
+        ["Unit Tests", "21 passing", "pytest framework"],
         ["Property Tests", "8 properties", "1,600 random topologies"],
         ["Total Tests", "29 passing", "0 failures"],
         ["Devices", "12", "Cisco / Arista / Juniper"],

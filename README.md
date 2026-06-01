@@ -2,7 +2,7 @@
 
 **A software-defined network simulator for quantitative trading infrastructure.**
 
-Built from scratch: an OCaml SDN controller, multi-vendor network automation, eBPF kernel monitoring, chaos engineering, RPKI security, and a real-time dashboard — simulating the full network stack of a quantitative trading firm.
+Built from scratch: a Python SDN controller, multi-vendor network automation, eBPF kernel monitoring, chaos engineering, RPKI security, and a real-time dashboard — simulating the full network stack of a quantitative trading firm.
 
 [Live Dashboard](https://frontend-two-eta-77.vercel.app)
 
@@ -12,12 +12,14 @@ Built from scratch: an OCaml SDN controller, multi-vendor network automation, eB
 
 | Metric | P99 | Target | Result |
 |--------|-----|--------|--------|
-| Path Computation (Dijkstra) | **1.52ms** | 50ms | 33x under budget |
-| Failover After Link Failure | **1.98ms** | 100ms | 50x under budget |
-| API Response (Health) | **0.94ms** | 10ms | 10x under budget |
-| Topology Serialization | **1.14ms** | 20ms | 17x under budget |
+| Path Computation (Dijkstra) | **1.84ms** | 50ms | 27x under budget |
+| Failover After Link Failure | **2.88ms** | 100ms | 35x under budget |
+| API Response (Health) | **1.46ms** | 10ms | 7x under budget |
+| Topology Serialization | **1.54ms** | 20ms | 13x under budget |
 
 29 tests passing (21 unit + 8 property-based across 1,600 random topologies).
+
+*Numbers are P99 over a representative local run (`make bench`); they vary run to run.*
 
 ---
 
@@ -53,24 +55,24 @@ Built from scratch: an OCaml SDN controller, multi-vendor network automation, eB
 
 ## Components
 
-### OCaml SDN Controller
-The core of the project. An SDN controller written in OCaml that ingests network telemetry, computes optimal paths using Dijkstra's algorithm weighted by live metrics, and exposes a REST API.
+### Python SDN Controller
+The core of the project. An SDN controller written in Python that ingests network telemetry, computes optimal paths using Dijkstra's algorithm weighted by live metrics, and exposes a REST API.
 
 - **4 traffic classes** with distinct optimization objectives: market data (min latency), trading (min latency + jitter), bulk transfer (max bandwidth), management (max reliability)
 - **Constraint engine** — avoid specific links, avoid sites, enforce max latency/hop budgets
-- **Immutable graph** — functional updates for lock-free concurrent access between telemetry ingestion and path computation
-- **Property-based testing** with QCheck: 8 invariants verified across 1,600 randomly generated topologies (path existence, optimality, symmetry, loop-freedom, failover correctness, metric consistency, JSON roundtrip, traffic class ordering)
+- **Immutable graph** — every update returns a new graph (functional updates) for lock-free concurrent access between telemetry ingestion and path computation
+- **Property-based testing** with pytest and a seeded topology generator: 8 invariants verified across 1,600 randomly generated topologies (path existence, optimality, symmetry, loop-freedom, failover correctness, metric consistency, JSON roundtrip, traffic class ordering)
 
 ```
 sdn-controller/
-├── lib/
-│   ├── topology/       # Network graph (devices, links, metrics, Dijkstra)
-│   ├── pathcomp/       # Path computation engine (traffic classes, constraints)
-│   └── api/            # Dream REST API (6 endpoints)
-├── bin/                # Main binary (demo topology + server)
-└── test/
-    ├── unit/           # 21 Alcotest cases
-    └── property/       # 8 QCheck properties
+├── tradenet_sdn/
+│   ├── network_graph.py   # Network graph (devices, links, metrics, Dijkstra)
+│   ├── path_engine.py     # Path computation engine (traffic classes, constraints)
+│   ├── server.py          # Flask REST API (7 endpoints)
+│   └── __main__.py        # Entry point (demo topology + server)
+└── tests/
+    ├── test_network_graph.py   # 21 unit tests
+    └── test_properties.py      # 8 property-based tests
 ```
 
 ### Multi-Vendor Automation
@@ -129,31 +131,28 @@ Next.js + Tailwind CSS dashboard deployed on Vercel. Shows live topology with op
 
 | Layer | Technology | Why |
 |-------|-----------|-----|
-| SDN Controller | OCaml 5.4, Dream, OCamlGraph | Strong types for control-plane safety, native performance |
+| SDN Controller | Python 3, Flask | Fast to build, ubiquitous tooling, one language across the controller + automation stack |
 | Network Sim | EVE-NG (Cisco/Arista/Juniper) | Multi-vendor realism |
 | Automation | Ansible + Nornir + Jinja2 | Declarative config + programmatic operations |
 | Monitoring | eBPF (C) + Prometheus + Grafana | Kernel-level precision, industry-standard metrics |
 | Security | RPKI (Routinator) | Cryptographic route origin validation |
 | Firewall | Juniper SRX zones | Stateful inspection with auto-generated rules |
 | Dashboard | Next.js 15, Tailwind CSS 4, Vercel | Modern frontend, static export, instant deploy |
-| Testing | Alcotest + QCheck | Unit tests + property-based testing |
+| Testing | pytest + property-based tests | Unit tests + property-based testing |
 
 ---
 
 ## Quick Start
 
 ```bash
-# Install OCaml dependencies
-opam install . --deps-only --yes
-
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Build and run the SDN controller
-cd sdn-controller && dune build && dune exec bin/main.exe
+# Run the SDN controller (serves the REST API on port 9090)
+cd sdn-controller && python3 -m tradenet_sdn
 
-# Run tests (29 total)
-dune runtest
+# Run tests (29 total: 21 unit + 8 property-based)
+cd sdn-controller && python3 -m pytest
 
 # Run chaos scenarios (requires running controller)
 python3 chaos/engine/chaos_runner.py
@@ -178,7 +177,7 @@ python3 multicast/generators/market_data_sim.py
 Every major design choice is documented with context, alternatives considered, and tradeoffs:
 
 - [ADR-001](docs/adr/ADR-001-bgp-ospf-hybrid-routing.md) — BGP/OSPF Hybrid Routing
-- [ADR-002](docs/adr/ADR-002-ocaml-sdn-controller.md) — OCaml for SDN Controller
+- [ADR-002](docs/adr/ADR-002-ocaml-sdn-controller.md) — SDN Controller language (originally OCaml; superseded — now Python)
 - [ADR-003](docs/adr/ADR-003-ebpf-over-sflow.md) — eBPF over sFlow/NetFlow
 - [ADR-004](docs/adr/ADR-004-eve-ng-over-gns3.md) — EVE-NG over GNS3/Containerlab
 - [ADR-006](docs/adr/ADR-006-ansible-and-nornir.md) — Ansible + Nornir (Both)
@@ -190,7 +189,7 @@ Every major design choice is documented with context, alternatives considered, a
 
 ```
 tradenet-fabric/
-├── sdn-controller/          # OCaml SDN controller (Dijkstra, REST API, tests)
+├── sdn-controller/          # Python SDN controller (Dijkstra, REST API, tests)
 ├── automation/
 │   ├── ansible/             # Playbooks, inventory, group vars
 │   ├── nornir/              # Python audit scripts

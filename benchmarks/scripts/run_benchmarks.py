@@ -245,7 +245,7 @@ def main():
 
     if not check_controller():
         console.print("[red]SDN controller not running![/]")
-        console.print("[yellow]Start with: cd sdn-controller && dune exec bin/main.exe &[/]")
+        console.print("[yellow]Start with: cd sdn-controller && python3 -m tradenet_sdn &[/]")
         return
 
     console.print("[green]SDN controller is running[/]\n")

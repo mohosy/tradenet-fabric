@@ -1,6 +1,9 @@
 # TradeNet Fabric — Python Dependencies
 # Network automation and tooling
 
+# SDN controller — REST API (Dijkstra path computation + topology state)
+flask>=3.0            # HTTP API for the SDN controller (port 9090)
+
 # Ansible — declarative network configuration management
 ansible>=8.0
 ansible-pylibssh>=1.1.0
